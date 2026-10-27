@@ -1,0 +1,43 @@
+service: central-feedbacks
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: python3.12
+  region: us-east-1
+  iam:
+    role: !Sub arn:aws:iam::${AWS::AccountId}:role/LabRole
+  environment:
+    QUEUE_URL: !Sub https://sqs.${AWS::Region}.amazonaws.com/${AWS::AccountId}/FeedbacksReclamacoesQueue
+    TABLE_NAME: FeedbacksReclamacoes
+    TOPIC_ARN: !Ref NotificacaoAtendimentoTopic
+
+functions:
+  recebimento:
+    handler: recebimento.handler
+    events:
+      - http:
+          path: feedback
+          method: post
+          cors: true
+          request:
+            schemas:
+              application/json: ${file(create_request.json)}
+
+  processamento:
+    handler: processamento.handler
+    events:
+      - sqs:
+          arn: arn:aws:sqs:${aws:region}:${aws:accountId}:FeedbacksReclamacoesQueue
+          batchSize: 10
+
+resources:
+  Resources:
+    NotificacaoAtendimentoTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: NotificacaoAtendimento
+        Subscription:
+          - Protocol: email
+            Endpoint: ${param:email}
